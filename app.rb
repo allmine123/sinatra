@@ -1,5 +1,21 @@
 require 'sinatra'
 require "sinatra/reloader"
+require 'rest-client'
+require 'json'
+require 'httparty'
+require 'nokogiri'
+require 'uri'
+require 'date'
+require 'csv'
+
+before do
+    p "***************"
+    p params
+    p request.path_info #사용자가 요청보낸 경로
+    p request.fullpath #파라미터
+    p"***************"
+end
+
 
 get '/' do
   'Hello world! Welcome~~~'
@@ -62,6 +78,116 @@ get '/lunch-hash' do
    erb :lunchhash
 end
 
+get '/randomgame/:name' do
+    @name = "#{params[:name]}"
+    
+    man_img = ["http://fimg4.pann.com/new/download.jsp?FileID=36895749","http://www.topstarnews.net/news/photo/201804/392424_37687_5028.jpg",
+    "http://image.hankookilbo.com/i.aspx?Guid=d89aed14f5e84df883e02b0d3238ec8d&Month=HKSports&size=640","http://img.insight.co.kr/upload/2015/06/16/ART150616064913.jpg",
+    "https://dispatch.cdnser.be/wp-content/uploads/2016/12/1e9f09cab883899da6e3cab28ba76ef5.jpg"]
+
+    
+    @man_img = man_img.sample
+    
+    erb :randomgame
+ 
+end
 
 
 
+get '/lotto-sample' do
+    #랜덤하게 로또번호 추첨!
+    @lotto = (1..45).to_a.sample(6).sort
+    
+    #erb파일 랜더링
+    url ="http://www.nlotto.co.kr/common.do?method=getLottoNumber&drwNo=809"
+    @lotto_info = RestClient.get(url) #JSON
+    @lotto_hash = JSON.parse(@lotto_info)
+
+    @winner = []
+    @lotto_hash.each do |k,v|
+        if k.include?('drwtNo')
+            #배열에 저장
+           @winner << v 
+        end
+    
+    end
+    
+    #winner와 lotto를 비교해서 몇 개가 일치하는 지 연산
+    @matchnum = (@winner & @lotto).length
+    @bonusnum = @lotto_hash["bnusNo"]
+
+    #몇 등인지를 출력 (if)
+    
+    # if(@matchnum == 6) then @rank = "1등"
+    # elsif (@matchnum == 5 && @lotto.include?(@bonusnum))
+    #     @rank = "2등"
+    # elsif (@matchnum == 5) then @rank = "3등"
+    # elsif (@matchnum == 4)
+    #     @rank = "4등"
+    # elsif (@matchnum == 3)
+    #     @rank = "5등"
+    # else
+    #     @rank = "5등 밑이야~~"
+    # end
+    
+    
+    #몇 등인지를 출력 (case)
+    
+    
+    # case [@matchnum, @lotto.include?(@bonusnum)]
+    # when [6, false] then @rank = "1등"
+    
+    @rank = 
+    case [@matchnum, @lotto.include?(@bonusnum)]
+    when [6, false] then "1등"
+    when [5, false] then "2등"
+    when [5, true] then "3등"
+    when [4, false] then "4등"
+    when [3, false] then "5등"
+    else"꽈아앙"
+end
+
+    erb :lottosample
+    
+end
+
+get '/form' do
+    
+    erb :form
+end
+
+get '/search' do
+    @keyword = params[:keyword]
+    url = 'https://search.naver.com/search.naver?query='
+    #erb :search
+    redirect to (url+@keyword)
+end
+
+get '/opgg' do
+    erb :opgg    
+end
+
+get '/opggresult'do
+    url ='http://www.op.gg/summoner/userName='
+    @userName = params[:userName]
+    @encodeName = URI.encode(@userName)
+    
+    @res = HTTParty.get(url + @encodeName)
+    @doc = Nokogiri::HTML(@res.body)
+    
+    @win = @doc.css("#SummonerLayoutContent > div.tabItem.Content.SummonerLayoutContent.summonerLayout-summary > div.SideContent > div.TierBox.Box > div.SummonerRatingMedium > div.TierRankInfo > div.TierInfo > span.WinLose > span.wins").text
+    @lose = @doc.css("#SummonerLayoutContent > div.tabItem.Content.SummonerLayoutContent.summonerLayout-summary > div.SideContent > div.TierBox.Box > div.SummonerRatingMedium > div.TierRankInfo > div.TierInfo > span.WinLose > span.losses").text
+    @rank = @doc.css("#SummonerLayoutContent > div.tabItem.Content.SummonerLayoutContent.summonerLayout-summary > div.SideContent > div.TierBox.Box > div.SummonerRatingMedium > div.TierRankInfo > div.TierRank > span").text
+    
+    #File.open(파일이름, 옵션)
+    
+    # File.open('opgg.txt','a+')do |f|
+    #     f.write("#{@userName} : #{@win}, #{@lose}, #{@rank}\n")
+    # end
+    
+    CSV.open('opgg.csv','a+') do |c|
+        c << [@userName, @win, @lose, @rank]
+    end
+    erb :opggresult
+    
+end
